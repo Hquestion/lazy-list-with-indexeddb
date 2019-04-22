@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style type="text/css">
+        .list-container {
+            width: 800px;
+            height: 100vh;
+            overflow: auto;
+        }
+        .top-holder {
+            height: 0;
+            width: 100%;
+        }
+        .bottom-holder {
+            height: 0;
+            width: 100%;
+        }
+        .item {
+            height: 120px;
+            background: #00B7FF;
+            border-bottom: 1px solid #f09;
+        }
+    </style>
+    <script src="./javascripts/vue.js"></script>
+    <script src="./javascripts/axios.js"></script>
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <script src="./javascripts/lodash.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="list-container">
+            <div class="top-holder" :style="{height: topHeight}"></div>
+            <div class="item" v-for="(item, index) in renderData" :key="item.id">
+                <div class="name">{{item.name}}</div>
+                <div class="name">{{item.x}}</div>
+                <div class="name">{{item.y}}</div>
+                <div class="name">{{item.w}}</div>
+                <div class="name">{{item.h}}</div>
+            </div>
+            <div class="bottom-holder" :style="{height: bottomHeight}"></div>
+        </div>
+    </div>
+</body>
+<script>
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                hello: 'hello',
+                renderData: Object.freeze([]),
+                count: 0,
+                topCount: 0,
+                containerCount: 0
+            };
+        },
+        computed: {
+            topHeight() {
+                return this.topCount * 120 + 'px';
+            },
+            bottomHeight() {
+                return (this.count - this.topCount - this.containerCount) * 120 + 'px'
+            }
+        },
+        watch: {
+            topCount() {
+                this.generateRenderData();
+            },
+            containerCount() {
+                this.generateRenderData();
+            }
+        },
+        methods: {
+            getData() {
+                axios.get('/data').then(res => {
+                    console.log(res.data);
+                    this.db.list.bulkAdd(res.data, 'id');
+                    this.count += res.data.length;
+                    this.calcCount();
+                });
+            },
+            calcCount(target) {
+                target = target || document.querySelector('.list-container');
+                var listHeight = 120 * this.count;
+                var viewportHeight = target.clientHeight;
+                var scrollTop = target.scrollTop;
+                var topCount = Math.floor(scrollTop / 120);
+                var containerCount = Math.ceil(viewportHeight / 120);
+                var bottomCount = Math.floor((listHeight - scrollTop - viewportHeight)/120);
+                this.containerCount = this.count - topCount - bottomCount;
+                this.topCount = topCount;
+            },
+            async generateRenderData() {
+                this.renderData = Object.freeze(await this.db.list.offset(this.topCount).limit(this.containerCount).toArray());
+            }
+        },
+        mounted() {
+            var db = new Dexie("list");
+            db.version(1).stores({
+                list: 'id, name'
+            });
+            this.db = db;
+            this.getData();
+            var scrollListener = e => {
+                var listHeight = 120 * this.count;
+                var viewportHeight = e.target.clientHeight;
+                var scrollTop = e.target.scrollTop;
+                if (listHeight - scrollTop - viewportHeight < 100) {
+                    this.getData();
+                } else {
+                    this.calcCount(e.target);
+                }
+            };
+            var listenerDebounce = _.debounce(scrollListener, 500);
+            this.$el.querySelector('.list-container').addEventListener('scroll', listenerDebounce);
+        }
+    })
+</script>
+</html>
